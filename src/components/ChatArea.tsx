@@ -366,7 +366,7 @@ export default function ChatArea() {
       }
     }
     return items
-  }, [messages])
+  }, [messages.length])
 
   const isNewChat = !currentSessionId || (generationItems.length === 0 && !isLoading)
   const lastUserMessage = messages.length > 0 ? messages[messages.length - 1] : null
