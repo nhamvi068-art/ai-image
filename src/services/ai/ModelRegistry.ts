@@ -3,6 +3,8 @@ import { BaseModelAdapter } from './BaseModelAdapter'
 import { NanoBanana2Adapter } from './adapters/NanoBanana2Adapter'
 import { NanoBanana3FlashAdapter } from './adapters/NanoBanana3FlashAdapter'
 import { GptImage2Adapter } from './adapters/GptImage2Adapter'
+import gptLogo from '../../assets/logos/gptlogo.png'
+import geminiLogo from '../../assets/logos/gemini logo.png'
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 
@@ -16,9 +18,9 @@ import { GptImage2Adapter } from './adapters/GptImage2Adapter'
 
 // Adapter key → logo (shared by all models using the same adapter)
 const ADAPTER_LOGOS: Record<string, string> = {
-  'gpt-image-2': '/src/assets/logos/gptlogo.png',
-  'gemini-3.1-flash-image-preview': '/src/assets/logos/gemini logo.png',
-  'nano-banana-2': '/src/assets/logos/gemini logo.png',
+  'gpt-image-2': gptLogo,
+  'gemini-3.1-flash-image-preview': geminiLogo,
+  'nano-banana-2': geminiLogo,
 }
 
 export const AVAILABLE_MODELS: ModelConfig[] = [
