@@ -62,6 +62,17 @@ function SidebarSessionList() {
 }
 
 export default function App() {
+  // #region debug logs
+  const dbg = (label: string, data?: unknown) => {
+    console.log(`[DBG App] ${label}`, data);
+    fetch('http://127.0.0.1:7252/ingest/f0ec8a8c-1b3f-43cf-b3aa-e816736c30f5', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9fecf5' },
+      body: JSON.stringify({ sessionId: '9fecf5', location: 'App.tsx', message: label, data, timestamp: Date.now() })
+    }).catch(() => {});
+  };
+  // #endregion
+
   useEffect(() => {
     useChatStore.getState().loadSessions()
   }, [])
@@ -74,13 +85,16 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
-    <div className={`
+    <div
+      className={`
       flex h-screen font-sans text-zinc-900 antialiased overflow-hidden selection:bg-zinc-200
       ${isSidebarOpen
         ? 'bg-[#F5F5F7] p-2 md:p-3 gap-2 md:gap-3'
         : 'bg-[#F5F5F7] p-0 gap-0 m-0'
       }
-    `}>
+    `}
+      onClick={(e) => dbg('app div click', { tag: (e.target as HTMLElement).tagName, className: (e.target as HTMLElement).className.slice(0, 100) })}
+    >
 
       {/* Mobile overlay backdrop */}
       {mobileSidebarOpen && (

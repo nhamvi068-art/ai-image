@@ -134,16 +134,37 @@ export default function InputBar() {
     return () => textareaRef.current?.removeEventListener('paste', handler)
   }, [])
 
+  // #region debug logs
+  const dbg = (label: string, data?: unknown) => {
+    console.log(`[DBG InputBar] ${label}`, data);
+    fetch('http://127.0.0.1:7252/ingest/f0ec8a8c-1b3f-43cf-b3aa-e816736c30f5', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9fecf5' },
+      body: JSON.stringify({ sessionId: '9fecf5', location: 'InputBar.tsx', message: label, data, timestamp: Date.now() })
+    }).catch(() => {});
+  };
+  // #endregion
+
+  // #region debug render logs
+  useEffect(() => { dbg('modelMenu render', { showModelMenu }); }, [showModelMenu]);
+  useEffect(() => { dbg('ratioMenu render', { showRatioMenu }); }, [showRatioMenu]);
+  useEffect(() => { dbg('countMenu render', { showCountMenu }); }, [showCountMenu]);
+  // #endregion
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-dropdown="model"]')) setShowModelMenu(false)
-      if (!target.closest('[data-dropdown="ratio"]')) setShowRatioMenu(false)
-      if (!target.closest('[data-dropdown="count"]')) setShowCountMenu(false)
+      const target = e.target as HTMLElement;
+      const inModel = target.closest('[data-dropdown="model"]') !== null;
+      const inRatio = target.closest('[data-dropdown="ratio"]') !== null;
+      const inCount = target.closest('[data-dropdown="count"]') !== null;
+      dbg('doc mousedown', { tag: target.tagName, inModel, inRatio, inCount, xy: `${e.clientX},${e.clientY}` });
+      if (!inModel) { dbg('close model menu'); setShowModelMenu(false); }
+      if (!inRatio) { dbg('close ratio menu'); setShowRatioMenu(false); }
+      if (!inCount) { dbg('close count menu'); setShowCountMenu(false); }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPromptText(e.target.value)
@@ -287,7 +308,7 @@ export default function InputBar() {
               {/* Model selector pill */}
               <div className="relative" data-dropdown="model">
                 <button
-                  onClick={() => setShowModelMenu(v => !v)}
+                  onClick={() => { dbg('model btn click', { currentVal: showModelMenu }); setShowModelMenu(v => !v); }}
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium text-[15px] transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {selectedModel?.logo && (
@@ -367,7 +388,7 @@ export default function InputBar() {
               {/* Ratio selector */}
               <div className="relative" data-dropdown="ratio">
                 <button
-                  onClick={() => setShowRatioMenu(!showRatioMenu)}
+                  onClick={() => { dbg('ratio btn click', { currentVal: showRatioMenu }); setShowRatioMenu(!showRatioMenu); }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {activeRatio} <ChevronDown size={14} className="text-zinc-400" />
@@ -449,7 +470,7 @@ export default function InputBar() {
               {/* Image count selector */}
               <div className="relative" data-dropdown="count">
                 <button
-                  onClick={() => setShowCountMenu(v => !v)}
+                  onClick={() => { dbg('count btn click', { currentVal: showCountMenu }); setShowCountMenu(v => !v); }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {imageCount}张 <ChevronDown size={14} className="text-zinc-400" />
