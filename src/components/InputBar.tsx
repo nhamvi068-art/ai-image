@@ -143,6 +143,7 @@ export default function InputBar() {
       body: JSON.stringify({ sessionId: '9fecf5', location: 'InputBar.tsx', message: label, data, timestamp: Date.now() })
     }).catch(() => {});
   };
+  const stopProp = (e: React.MouseEvent) => { e.stopPropagation(); dbg('stopProp', { el: (e.target as HTMLElement).tagName }); };
   // #endregion
 
   // #region debug render logs
@@ -308,6 +309,7 @@ export default function InputBar() {
               {/* Model selector pill */}
               <div className="relative" data-dropdown="model">
                 <button
+                  onMouseDown={stopProp}
                   onClick={() => { dbg('model btn click', { currentVal: showModelMenu }); setShowModelMenu(v => !v); }}
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium text-[15px] transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
@@ -388,6 +390,7 @@ export default function InputBar() {
               {/* Ratio selector */}
               <div className="relative" data-dropdown="ratio">
                 <button
+                  onMouseDown={stopProp}
                   onClick={() => { dbg('ratio btn click', { currentVal: showRatioMenu }); setShowRatioMenu(!showRatioMenu); }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
@@ -470,6 +473,7 @@ export default function InputBar() {
               {/* Image count selector */}
               <div className="relative" data-dropdown="count">
                 <button
+                  onMouseDown={stopProp}
                   onClick={() => { dbg('count btn click', { currentVal: showCountMenu }); setShowCountMenu(v => !v); }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >

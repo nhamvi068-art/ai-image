@@ -93,7 +93,7 @@ export default function App() {
         : 'bg-[#F5F5F7] p-0 gap-0 m-0'
       }
     `}
-      onClick={(e) => dbg('app div click', { tag: (e.target as HTMLElement).tagName, className: (e.target as HTMLElement).className.slice(0, 100) })}
+      onClick={(e) => dbg('app div click', { tag: (e.target as HTMLElement).tagName, className: String((e.target as HTMLElement).className).slice(0, 100) })}
     >
 
       {/* Mobile overlay backdrop */}
