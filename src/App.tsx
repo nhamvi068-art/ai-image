@@ -77,8 +77,8 @@ export default function App() {
     <div className={`
       flex h-screen font-sans text-zinc-900 antialiased overflow-hidden selection:bg-zinc-200
       ${isSidebarOpen
-        ? 'bg-[#F5F5F7] p-2 md:p-3 gap-2 md:gap-3'
-        : 'bg-[#F5F5F7] p-0 gap-0 m-0'
+        ? 'p-2 md:p-3 gap-2 md:gap-3'
+        : 'p-0 gap-0'
       }
     `}>
 
@@ -167,7 +167,7 @@ export default function App() {
 
       {/* Main Canvas */}
       <main className={`
-        flex-1 relative flex flex-col overflow-hidden
+        flex-1 flex flex-col min-h-screen overflow-hidden
         transition-all duration-300 ease-in-out
         ${isSidebarOpen
           ? 'bg-zinc-50 rounded-2xl md:rounded-3xl shadow-[0_0_0_1px_rgba(0,0,0,0.02),0_8px_32px_rgba(0,0,0,0.04)]'
