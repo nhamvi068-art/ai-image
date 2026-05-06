@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Opentu Brand Color Variables ───────────────────────────────────────────── */
+@layer base {
+  :root {
+    --brand-orange: #F39C12;
+    --brand-orange-light: #FBBF24;
+    --brand-orange-dark: #E67E22;
+    --brand-orange-darker: #D35400;
+    --brand-purple: #5A4FCF;
+    --brand-purple-light: #7B68EE;
+    --brand-accent: #E91E63;
+    --brand-accent-light: #F06292;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #ffffff;
+    color: #18181b;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* ── Light mode (default) ─────────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #e4e4e7;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1aa;
+  }
+
+  ::selection {
+    background: #3b82f633;
+    color: #18181b;
+  }
+}
+
+@layer components {
+  /* ── Brand color utilities ─────────────────────────────────────────────────── */
+  .bg-brand-orange   { background-color: var(--brand-orange); }
+  .bg-brand-purple   { background-color: var(--brand-purple); }
+  .bg-brand-accent   { background-color: var(--brand-accent); }
+
+  .text-brand-orange   { color: var(--brand-orange); }
+  .text-brand-orange-dark  { color: var(--brand-orange-dark); }
+  .text-brand-purple   { color: var(--brand-purple); }
+  .text-brand-accent   { color: var(--brand-accent); }
+
+  .hover\:bg-brand-orange\/10:hover  { background-color: color-mix(in srgb, var(--brand-orange) 10%, transparent); }
+  .hover\:bg-brand-orange\/15:hover  { background-color: color-mix(in srgb, var(--brand-orange) 15%, transparent); }
+  .hover\:text-brand-orange:hover    { color: var(--brand-orange); }
+  .hover\:border-brand-orange:hover  { border-color: var(--brand-orange); }
+
+  .ring-brand-orange { --tw-ring-color: var(--brand-orange); }
+
+  /* ── Floating Toolbar (Opentu style) ─────────────────────────────────────── */
+  .frosted-toolbar {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Hide scrollbar in toolbar while keeping scrollability */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Glass morphism ────────────────────────────────────────────────────────── */
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border shadow-xl;
+    @apply border-gray-100/50;
+  }
+}
+
+@layer utilities {
+  /* ── Shimmer sweep (skeleton loading) ──────────────────────── */
+  .animate-shimmer {
+    background: linear-gradient(
+      105deg,
+      transparent 2%,
+      rgba(255, 255, 255, 0.15) 15%,
+      rgba(255, 255, 255, 0.55) 35%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0.15) 65%,
+      transparent 98%
+    );
+    background-size: 250% 100%;
+    animation: shimmer-sweep 2.2s ease-in-out infinite;
+  }
+
+  @keyframes shimmer-sweep {
+    0%   { background-position: 250% 0; }
+    100% { background-position: -250% 0; }
+  }
+}
