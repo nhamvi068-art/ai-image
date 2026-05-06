@@ -53,7 +53,7 @@ async function checkIdbHealth(): Promise<boolean> {
   if (idbCheckDone) return idbAvailable!
   idbCheckDone = true
   try {
-    const probe = await Promise.race([
+    await Promise.race([
       db.sessions.count(),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IDB_TIMEOUT')), 3000))
     ])

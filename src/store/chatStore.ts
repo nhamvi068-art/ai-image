@@ -114,7 +114,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     // ── UI actions ─────────────────────────────────────────────────────────────
 
-    toggleSidebar: () => set((s) => ({ isSidebarOpen: !s.isSidebarOpen })),
+    toggleSidebar: () => set((_state) => ({ isSidebarOpen: !_state.isSidebarOpen })),
 
     toggleTheme: () => {
       const next = !get().isDarkMode
@@ -182,6 +182,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     sendMessageWithImage: async (prompt: string, referenceImages: string[]) => {
       const { currentSessionId, selectedModelId, imageCount } = get()
       let sessionId: number | null = currentSessionId
+      const currentRatio = get().activeRatio
 
       try {
         if (!sessionId) {
@@ -212,17 +213,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
           ratio: get().activeRatio,
           createdAt: new Date(),
         }
-        set((s) => ({ messages: [...s.messages, userMsg], isLoading: true, generationPhase: 'waiting' }))
+        set((_state) => ({ messages: [..._state.messages, userMsg], isLoading: true, generationPhase: 'waiting' }))
 
         const adapter = resolveModelAdapter(selectedModelId)
         const imageUrls = referenceImages.length > 0 ? referenceImages : undefined
-        const ratio = get().activeRatio
 
         set({ generationPhase: 'generating' })
 
         // Concurrent generation of N images — use allSettled so partial success is preserved
         const generatePromises = Array.from({ length: imageCount }, () =>
-          adapter.generate({ prompt, ratio, imageUrls })
+          adapter.generate({ prompt, ratio: currentRatio, imageUrls })
         )
         const settled = await Promise.allSettled(generatePromises)
         const blobs: Blob[] = []
@@ -249,11 +249,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
               content: `生成失败: ${errorMessage}`,
               modelId: selectedModelId,
               referenceImages: [],
-              ratio,
+              ratio: currentRatio,
               createdAt: new Date(),
             })
-            set((s) => ({
-              messages: [...s.messages, {
+            set((_state) => ({
+              messages: [..._state.messages, {
                 id: errorMsgId,
                 sessionId,
                 role: 'assistant',
@@ -261,14 +261,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 content: `生成失败: ${errorMessage}`,
                 modelId: selectedModelId,
                 referenceImages: [],
-                ratio,
+                ratio: currentRatio,
                 createdAt: new Date(),
               } as Message],
             }))
           } catch (dbErr) {
             console.error('[ChatStore] Failed to save error message to DB:', dbErr)
-            set((s) => ({
-              messages: [...s.messages, {
+            set((_state) => ({
+              messages: [..._state.messages, {
                 id: Date.now(),
                 sessionId,
                 role: 'assistant',
@@ -276,7 +276,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 content: `生成失败: ${errorMessage}`,
                 modelId: selectedModelId,
                 referenceImages: [],
-                ratio,
+                ratio: currentRatio,
                 createdAt: new Date(),
               } as Message],
             }))
@@ -293,7 +293,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           content: blobs.length === 1 ? blobs[0] : blobs,
           modelId: selectedModelId,
           referenceImages: [],
-          ratio,
+          ratio: currentRatio,
           createdAt: new Date(),
         })
 
@@ -305,11 +305,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
           content: blobs.length === 1 ? blobs[0] : blobs,
           modelId: selectedModelId,
           referenceImages: [],
-          ratio,
+          ratio: currentRatio,
           createdAt: new Date(),
         }
 
-        set((s) => ({ messages: [...s.messages, assistantMsg], isLoading: false, generationPhase: 'idle' }))
+        set((_state) => ({ messages: [..._state.messages, assistantMsg], isLoading: false, generationPhase: 'idle' }))
         const sessions = await listSessions()
         set({ sessions })
       } catch (err) {
@@ -325,11 +325,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
               content: `生成失败: ${errorMessage}`,
               modelId: selectedModelId,
               referenceImages: [],
-              ratio,
+              ratio: currentRatio,
               createdAt: new Date(),
             })
-            set((s) => ({
-              messages: [...s.messages, {
+            set((_state) => ({
+              messages: [..._state.messages, {
                 id: errorMsgId,
                 sessionId,
                 role: 'assistant',
@@ -337,14 +337,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 content: `生成失败: ${errorMessage}`,
                 modelId: selectedModelId,
                 referenceImages: [],
-                ratio,
+                ratio: currentRatio,
                 createdAt: new Date(),
               } as Message],
             }))
           } catch (dbErr) {
             console.error('[ChatStore] Failed to save error message to DB:', dbErr)
-            set((s) => ({
-              messages: [...s.messages, {
+            set((_state) => ({
+              messages: [..._state.messages, {
                 id: Date.now(),
                 sessionId,
                 role: 'assistant',
@@ -352,7 +352,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 content: `生成失败: ${errorMessage}`,
                 modelId: selectedModelId,
                 referenceImages: [],
-                ratio,
+                ratio: currentRatio,
                 createdAt: new Date(),
               } as Message],
             }))
@@ -385,8 +385,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     deleteGenerationBatch: async (userMsgId: number, assistantMsgId: number) => {
       await deleteMessages([userMsgId, assistantMsgId])
-      set((s) => ({
-        messages: s.messages.filter(
+      set((_state) => ({
+        messages: _state.messages.filter(
           (m) => m.id !== userMsgId && m.id !== assistantMsgId
         ),
       }))

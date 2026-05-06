@@ -40,9 +40,7 @@ export class GptImage2Adapter extends BaseModelAdapter {
   async generate(params: GenerateImageParams): Promise<GenerateImageResponse> {
     this.validateParams(params)
 
-    const tier = this.modelId === 'gpt-image-2-4k' ? '4k'
-      : this.modelId === 'gpt-image-2-2k' ? '2k'
-      : '1k'
+    const tier: '1k' | '2k' | '4k' = '1k'
 
     const headers = getHeaders()
     const baseUrl = getBaseUrl()
