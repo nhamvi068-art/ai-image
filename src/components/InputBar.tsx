@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useChatStore } from '../store/chatStore'
 import { AVAILABLE_MODELS } from '../services/ai/ModelRegistry'
 import {
@@ -83,6 +84,12 @@ export default function InputBar() {
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showCountMenu, setShowCountMenu] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [modelMenuPos, setModelMenuPos] = useState({ top: 0, left: 0 })
+  const [ratioMenuPos, setRatioMenuPos] = useState({ top: 0, left: 0 })
+  const [countMenuPos, setCountMenuPos] = useState({ top: 0, left: 0 })
+  const modelBtnRef = useRef<HTMLButtonElement>(null)
+  const ratioBtnRef = useRef<HTMLButtonElement>(null)
+  const countBtnRef = useRef<HTMLButtonElement>(null)
   const [promptText, setPromptText] = useState('')
   const [referenceImages, setReferenceImages] = useState<string[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -143,7 +150,6 @@ export default function InputBar() {
       body: JSON.stringify({ sessionId: '9fecf5', location: 'InputBar.tsx', message: label, data, timestamp: Date.now() })
     }).catch(() => {});
   };
-  const stopProp = (e: React.MouseEvent) => { e.stopPropagation(); dbg('stopProp', { el: (e.target as HTMLElement).tagName }); };
   // #endregion
 
   // #region debug render logs
@@ -309,8 +315,14 @@ export default function InputBar() {
               {/* Model selector pill */}
               <div className="relative" data-dropdown="model">
                 <button
-                  onMouseDown={stopProp}
-                  onClick={() => { dbg('model btn click', { currentVal: showModelMenu }); setShowModelMenu(v => !v); }}
+                  ref={modelBtnRef}
+                  onClick={() => {
+                    if (modelBtnRef.current) {
+                      const rect = modelBtnRef.current.getBoundingClientRect();
+                      setModelMenuPos({ top: rect.top, left: rect.left });
+                    }
+                    setShowModelMenu(v => !v);
+                  }}
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium text-[15px] transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {selectedModel?.logo && (
@@ -324,19 +336,15 @@ export default function InputBar() {
                   <ChevronDown size={14} className="text-zinc-400" />
                 </button>
 
-                {showModelMenu && (
-                  <div className="
-                    absolute top-full left-0 mt-2
-                    md:bottom-full md:mt-0 md:mb-2
-                    bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.1)]
-                    border border-zinc-100 z-20 min-w-[200px]
-                    animate-fade-in overflow-hidden
-                  ">
-                    {/* Top hint */}
+                {showModelMenu && createPortal(
+                  <div
+                    style={{ position: 'fixed', top: modelMenuPos.top - 8, left: modelMenuPos.left, transform: 'translateY(-100%)' }}
+                    className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[200px] animate-fade-in overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="px-3 py-2 border-b border-zinc-100">
                       <span className="text-[12px] text-zinc-400 font-medium">模型</span>
                     </div>
-
                     <div className="p-1.5">
                       {AVAILABLE_MODELS.map((model, index) => {
                         const prevKey = index > 0 ? AVAILABLE_MODELS[index - 1].adapterKey : null
@@ -378,7 +386,8 @@ export default function InputBar() {
                         )
                       })}
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
 
@@ -390,134 +399,131 @@ export default function InputBar() {
               {/* Ratio selector */}
               <div className="relative" data-dropdown="ratio">
                 <button
-                  onMouseDown={stopProp}
-                  onClick={() => { dbg('ratio btn click', { currentVal: showRatioMenu }); setShowRatioMenu(!showRatioMenu); }}
+                  ref={ratioBtnRef}
+                  onClick={() => {
+                    if (ratioBtnRef.current) {
+                      const rect = ratioBtnRef.current.getBoundingClientRect();
+                      setRatioMenuPos({ top: rect.top, left: rect.left });
+                    }
+                    setShowRatioMenu(!showRatioMenu);
+                  }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {activeRatio} <ChevronDown size={14} className="text-zinc-400" />
                 </button>
 
-                {showRatioMenu && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-[-1]"
-                      onClick={() => setShowRatioMenu(false)}
-                    />
-                    <div className="
-                      absolute top-full right-0 mt-2
-                      md:bottom-full md:mt-0 md:mb-2
-                      bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.1)]
-                      border border-zinc-100 z-10 min-w-[200px]
-                      animate-fade-in overflow-hidden
-                    ">
-                      <div className="px-3 py-2 border-b border-zinc-100">
-                        <span className="text-[12px] text-zinc-400 font-medium">比例</span>
-                      </div>
-
-                      <div className="p-1.5">
-                        {RATIO_CATEGORIES.map((cat, ci) => (
-                          <React.Fragment key={cat.label}>
-                            {ci > 0 && <div className="h-px bg-zinc-100 my-1" />}
-                            <div className="px-2 py-1">
-                              <span className="text-[10px] text-zinc-300 font-semibold uppercase tracking-wider">
-                                {cat.label}
-                              </span>
-                            </div>
-                            {cat.items.map(ratio => (
-                              <button
-                                key={ratio.id}
-                                onClick={() => {
-                                  setActiveRatio(ratio.id)
-                                  setShowRatioMenu(false)
-                                }}
-                                className={`
-                                  w-full text-left px-2 py-1.5 rounded-lg transition-colors flex items-center justify-between
-                                  ${activeRatio === ratio.id
-                                    ? 'bg-zinc-100'
-                                    : 'hover:bg-zinc-50'
-                                  }
-                                `}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="w-5 h-5 flex items-center justify-center">
-                                    <RatioIcon id={ratio.id} active={activeRatio === ratio.id} />
-                                  </div>
-                                  <span className={`
-                                    text-[13px] font-semibold
-                                    ${activeRatio === ratio.id ? 'text-zinc-900' : 'text-zinc-700'}
-                                  `}>
-                                    {ratio.label}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`
-                                    text-[11px]
-                                    ${activeRatio === ratio.id ? 'text-zinc-500' : 'text-zinc-300'}
-                                  `}>
-                                    {ratio.desc}
-                                  </span>
-                                  {activeRatio === ratio.id && (
-                                    <Check size={13} className="text-zinc-900 shrink-0" strokeWidth={3} />
-                                  )}
-                                </div>
-                              </button>
-                            ))}
-                          </React.Fragment>
-                        ))}
-                      </div>
+                {showRatioMenu && createPortal(
+                  <div
+                    style={{ position: 'fixed', top: ratioMenuPos.top - 8, left: ratioMenuPos.left, transform: 'translateY(-100%)' }}
+                    className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[200px] animate-fade-in overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-zinc-100">
+                      <span className="text-[12px] text-zinc-400 font-medium">比例</span>
                     </div>
-                  </>
+                    <div className="p-1.5">
+                      {RATIO_CATEGORIES.map((cat, ci) => (
+                        <React.Fragment key={cat.label}>
+                          {ci > 0 && <div className="h-px bg-zinc-100 my-1" />}
+                          <div className="px-2 py-1">
+                            <span className="text-[10px] text-zinc-300 font-semibold uppercase tracking-wider">
+                              {cat.label}
+                            </span>
+                          </div>
+                          {cat.items.map(ratio => (
+                            <button
+                              key={ratio.id}
+                              onClick={() => {
+                                setActiveRatio(ratio.id)
+                                setShowRatioMenu(false)
+                              }}
+                              className={`
+                                w-full text-left px-2 py-1.5 rounded-lg transition-colors flex items-center justify-between
+                                ${activeRatio === ratio.id
+                                  ? 'bg-zinc-100'
+                                  : 'hover:bg-zinc-50'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 flex items-center justify-center">
+                                  <RatioIcon id={ratio.id} active={activeRatio === ratio.id} />
+                                </div>
+                                <span className={`
+                                  text-[13px] font-semibold
+                                  ${activeRatio === ratio.id ? 'text-zinc-900' : 'text-zinc-700'}
+                                `}>
+                                  {ratio.label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`
+                                  text-[11px]
+                                  ${activeRatio === ratio.id ? 'text-zinc-500' : 'text-zinc-300'}
+                                `}>
+                                  {ratio.desc}
+                                </span>
+                                {activeRatio === ratio.id && (
+                                  <Check size={13} className="text-zinc-900 shrink-0" strokeWidth={3} />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>,
+                  document.body
                 )}
               </div>
 
               {/* Image count selector */}
               <div className="relative" data-dropdown="count">
                 <button
-                  onMouseDown={stopProp}
-                  onClick={() => { dbg('count btn click', { currentVal: showCountMenu }); setShowCountMenu(v => !v); }}
+                  ref={countBtnRef}
+                  onClick={() => {
+                    if (countBtnRef.current) {
+                      const rect = countBtnRef.current.getBoundingClientRect();
+                      setCountMenuPos({ top: rect.top, left: rect.left });
+                    }
+                    setShowCountMenu(v => !v);
+                  }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {imageCount}张 <ChevronDown size={14} className="text-zinc-400" />
                 </button>
 
-                {showCountMenu && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-[-1]"
-                      onClick={() => setShowCountMenu(false)}
-                    />
-                    <div className="
-                      absolute top-full right-0 mt-2
-                      md:bottom-full md:mt-0 md:mb-2
-                      bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.1)]
-                      border border-zinc-100 z-10 min-w-[140px]
-                      animate-fade-in overflow-hidden
-                    ">
-                      <div className="px-3 py-2 border-b border-zinc-100">
-                        <span className="text-[12px] text-zinc-400 font-medium">生成数量</span>
-                      </div>
-                      <div className="p-1.5 grid grid-cols-2 gap-1">
-                        {[1, 2, 3, 4].map(n => (
-                          <button
-                            key={n}
-                            onClick={() => {
-                              setImageCount(n)
-                              setShowCountMenu(false)
-                            }}
-                            className={`
-                              px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors
-                              ${imageCount === n
-                                ? 'bg-zinc-900 text-white'
-                                : 'text-zinc-600 hover:bg-zinc-50'
-                              }
-                            `}
-                          >
-                            {n}张
-                          </button>
-                        ))}
-                      </div>
+                {showCountMenu && createPortal(
+                  <div
+                    style={{ position: 'fixed', top: countMenuPos.top - 8, left: countMenuPos.left, transform: 'translateY(-100%)' }}
+                    className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[140px] animate-fade-in overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-zinc-100">
+                      <span className="text-[12px] text-zinc-400 font-medium">生成数量</span>
                     </div>
-                  </>
+                    <div className="p-1.5 grid grid-cols-2 gap-1">
+                      {[1, 2, 3, 4].map(n => (
+                        <button
+                          key={n}
+                          onClick={() => {
+                            setImageCount(n)
+                            setShowCountMenu(false)
+                          }}
+                          className={`
+                            px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors
+                            ${imageCount === n
+                              ? 'bg-zinc-900 text-white'
+                              : 'text-zinc-600 hover:bg-zinc-50'
+                            }
+                          `}
+                        >
+                          {n}张
+                        </button>
+                      ))}
+                    </div>
+                  </div>,
+                  document.body
                 )}
               </div>
 
