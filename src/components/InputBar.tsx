@@ -323,6 +323,7 @@ export default function InputBar() {
                     }
                     setShowModelMenu(v => !v);
                   }}
+                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium text-[15px] transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {selectedModel?.logo && (
@@ -407,6 +408,7 @@ export default function InputBar() {
                     }
                     setShowRatioMenu(!showRatioMenu);
                   }}
+                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {activeRatio} <ChevronDown size={14} className="text-zinc-400" />
@@ -488,6 +490,7 @@ export default function InputBar() {
                     }
                     setShowCountMenu(v => !v);
                   }}
+                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {imageCount}张 <ChevronDown size={14} className="text-zinc-400" />
