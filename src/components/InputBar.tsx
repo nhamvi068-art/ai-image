@@ -323,7 +323,6 @@ export default function InputBar() {
                     }
                     setShowModelMenu(v => !v);
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium text-[15px] transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {selectedModel?.logo && (
@@ -339,9 +338,9 @@ export default function InputBar() {
 
                 {showModelMenu && createPortal(
                   <div
+                    data-dropdown="model"
                     style={{ position: 'fixed', top: modelMenuPos.top - 8, left: modelMenuPos.left, transform: 'translateY(-100%)' }}
                     className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[200px] animate-fade-in overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-3 py-2 border-b border-zinc-100">
                       <span className="text-[12px] text-zinc-400 font-medium">模型</span>
@@ -408,7 +407,6 @@ export default function InputBar() {
                     }
                     setShowRatioMenu(!showRatioMenu);
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {activeRatio} <ChevronDown size={14} className="text-zinc-400" />
@@ -416,9 +414,9 @@ export default function InputBar() {
 
                 {showRatioMenu && createPortal(
                   <div
+                    data-dropdown="ratio"
                     style={{ position: 'fixed', top: ratioMenuPos.top - 8, left: ratioMenuPos.left, transform: 'translateY(-100%)' }}
                     className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[200px] animate-fade-in overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-3 py-2 border-b border-zinc-100">
                       <span className="text-[12px] text-zinc-400 font-medium">比例</span>
@@ -490,7 +488,6 @@ export default function InputBar() {
                     }
                     setShowCountMenu(v => !v);
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
                   {imageCount}张 <ChevronDown size={14} className="text-zinc-400" />
@@ -498,9 +495,9 @@ export default function InputBar() {
 
                 {showCountMenu && createPortal(
                   <div
+                    data-dropdown="count"
                     style={{ position: 'fixed', top: countMenuPos.top - 8, left: countMenuPos.left, transform: 'translateY(-100%)' }}
                     className="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-zinc-100 z-[9999] min-w-[140px] animate-fade-in overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-3 py-2 border-b border-zinc-100">
                       <span className="text-[12px] text-zinc-400 font-medium">生成数量</span>
