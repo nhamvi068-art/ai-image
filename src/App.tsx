@@ -3,9 +3,11 @@ import ChatArea from './components/ChatArea'
 import InputBar from './components/InputBar'
 import Toast from './components/Toast'
 import SettingsModal from './components/SettingsModal'
+import GalleryModal from './components/GalleryModal'
 import { useChatStore } from './store/chatStore'
 import { useSettingsStore } from './store/settingsStore'
-import { PanelLeft, RefreshCw, Plus, Settings, MessageSquare, Menu } from 'lucide-react'
+import { useGalleryStore } from './store/galleryStore'
+import { PanelLeft, RefreshCw, Plus, Settings, MessageSquare, Menu, ImageIcon } from 'lucide-react'
 
 function SidebarSessionList() {
   const sessions = useChatStore(s => s.sessions)
@@ -23,14 +25,7 @@ function SidebarSessionList() {
             key={session.id}
             onMouseEnter={() => setHoveredSessionId(session.id ?? null)}
             onMouseLeave={() => setHoveredSessionId(null)}
-            className={`
-              flex items-center gap-2 rounded-full cursor-pointer transition-colors group
-              px-3 py-2
-              ${isActive
-                ? 'bg-zinc-200 text-zinc-800 font-medium'
-                : 'text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-800 font-medium'
-              }
-            `}
+            className={`flex items-center gap-2 rounded-full cursor-pointer transition-colors group px-3 py-2 ${isActive ? 'bg-zinc-200 text-zinc-800 font-medium' : 'text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-800 font-medium'}`}
           >
             <MessageSquare size={16} className="shrink-0" strokeWidth={2} />
             <span
@@ -62,17 +57,6 @@ function SidebarSessionList() {
 }
 
 export default function App() {
-  // #region debug logs
-  const dbg = (label: string, data?: unknown) => {
-    console.log(`[DBG App] ${label}`, data);
-    fetch('http://127.0.0.1:7252/ingest/f0ec8a8c-1b3f-43cf-b3aa-e816736c30f5', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9fecf5' },
-      body: JSON.stringify({ sessionId: '9fecf5', location: 'App.tsx', message: label, data, timestamp: Date.now() })
-    }).catch(() => {});
-  };
-  // #endregion
-
   useEffect(() => {
     useChatStore.getState().loadSessions()
   }, [])
@@ -83,17 +67,31 @@ export default function App() {
   const currentSession = sessions.find(s => s.id === currentSessionId)
   const sessionTitle = currentSession?.title || '开始创作'
   const [showSettings, setShowSettings] = useState(false)
+  const openGallery = useGalleryStore(s => s.openGallery)
+
+  const asideClasses = [
+    'flex flex-col justify-between py-4 overflow-hidden shrink-0',
+    'transition-[width,padding,transform,opacity] duration-300 ease-in-out',
+    'fixed md:relative inset-y-0 left-0 z-40',
+    'bg-[#F5F5F7]',
+    isSidebarOpen
+      ? 'w-[260px] px-2 translate-x-0 opacity-100'
+      : 'w-[260px] px-2 -translate-x-full opacity-0 md:translate-x-0 md:opacity-100 md:w-0 md:px-0',
+    mobileSidebarOpen ? 'translate-x-0 opacity-100' : '',
+  ].filter(Boolean).join(' ')
+
+  const mainClasses = [
+    'flex-1 relative flex flex-col overflow-hidden',
+    'transition-all duration-300 ease-in-out',
+    'bg-zinc-50',
+    isSidebarOpen
+      ? 'rounded-2xl md:rounded-3xl shadow-[0_0_0_1px_rgba(0,0,0,0.02),0_8px_32px_rgba(0,0,0,0.04)]'
+      : 'rounded-none shadow-none',
+  ].join(' ')
 
   return (
     <div
-      className={`
-      flex h-screen font-sans text-zinc-900 antialiased overflow-hidden selection:bg-zinc-200
-      ${isSidebarOpen
-        ? 'bg-[#F5F5F7] p-2 md:p-3 gap-2 md:gap-3'
-        : 'bg-[#F5F5F7] p-0 gap-0 m-0'
-      }
-    `}
-      onClick={(e) => dbg('app div click', { tag: (e.target as HTMLElement).tagName, className: String((e.target as HTMLElement).className).slice(0, 100) })}
+      className={`flex h-screen font-sans text-zinc-900 antialiased overflow-hidden selection:bg-zinc-200 ${isSidebarOpen ? 'bg-[#F5F5F7] p-2 md:p-3 gap-2 md:gap-3' : 'bg-[#F5F5F7] p-0 gap-0 m-0'}`}
     >
 
       {/* Mobile overlay backdrop */}
@@ -106,17 +104,7 @@ export default function App() {
 
       {/* Sidebar */}
       <aside
-        className={`
-          flex flex-col justify-between py-4 overflow-hidden shrink-0
-          transition-[width,padding,transform,opacity] duration-300 ease-in-out
-          fixed md:relative inset-y-0 left-0 z-40
-          ${isSidebarOpen
-            ? 'w-[260px] px-2 translate-x-0 opacity-100'
-            : 'w-[260px] px-2 -translate-x-full opacity-0 md:translate-x-0 md:opacity-100 md:w-0 md:px-0'
-          }
-          ${mobileSidebarOpen ? 'translate-x-0 opacity-100' : ''}
-          bg-[#F5F5F7]
-        `}
+        className={asideClasses}
       >
         <div className="flex flex-col h-full overflow-hidden">
 
@@ -151,11 +139,7 @@ export default function App() {
 
           {/* History list */}
           <div className="flex-1 overflow-y-auto px-1 custom-scrollbar">
-            <div className={`
-              text-[13px] font-semibold text-zinc-400 mb-3 px-3 mt-2
-              transition-all duration-300 ease-in-out
-              ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-            `}>
+            <div className={`text-[13px] font-semibold text-zinc-400 mb-3 px-3 mt-2 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               历史记录
             </div>
             <SidebarSessionList />
@@ -180,14 +164,7 @@ export default function App() {
       </aside>
 
       {/* Main Canvas */}
-      <main className={`
-        flex-1 relative flex flex-col overflow-hidden
-        transition-all duration-300 ease-in-out
-        ${isSidebarOpen
-          ? 'bg-zinc-50 rounded-2xl md:rounded-3xl shadow-[0_0_0_1px_rgba(0,0,0,0.02),0_8px_32px_rgba(0,0,0,0.04)]'
-          : 'bg-zinc-50 rounded-none shadow-none'
-        }
-      `}>
+      <main className={mainClasses}>
         {/* Unified header: menu button + title + token balance */}
         <header className="flex items-center justify-between px-4 md:px-8 pt-6 pb-3 z-20">
           <div className="flex items-center gap-3">
@@ -227,6 +204,18 @@ export default function App() {
               {quotaLoading ? '' : (quota !== null ? quota : '--')}
             </span>
           </div>
+          <button
+            onClick={openGallery}
+            className="
+              flex items-center gap-2 rounded-2xl text-zinc-500
+              hover:text-zinc-700 hover:bg-zinc-100 transition-colors
+              px-4 py-2
+            "
+            title="素材库"
+          >
+            <ImageIcon size={16} strokeWidth={2} />
+            <span className="text-[13px] font-bold whitespace-nowrap hidden md:block">素材库</span>
+          </button>
         </header>
 
         <ChatArea />
@@ -238,6 +227,7 @@ export default function App() {
       )}
 
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      <GalleryModal />
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar {

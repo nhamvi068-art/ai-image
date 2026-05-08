@@ -19,7 +19,7 @@ import geminiLogo from '../../assets/logos/gemini logo.png'
 // Adapter key → logo (shared by all models using the same adapter)
 const ADAPTER_LOGOS: Record<string, string> = {
   'gpt-image-2': gptLogo,
-  'gemini-3.1-flash-image-preview': geminiLogo,
+  'nano-banana-pro': geminiLogo,
   'nano-banana-2': geminiLogo,
 }
 
@@ -52,65 +52,65 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
     logo: ADAPTER_LOGOS['gpt-image-2'],
   },
   {
-    id: 'gemini-3.1-flash-image-preview-512px',
+    id: 'nano-banana-2',
     name: 'Nano Banana 2',
-    description: 'Google Gemini 3.1 Flash 图像预览，512px 输出',
-    adapterKey: 'gemini-3.1-flash-image-preview',
+    description: 'Nano Banana 2，512px 输出',
+    adapterKey: 'nano-banana-2',
     maxPromptLength: 4000,
     supportedRatios: ['1:1', '16:9', '9:16'],
-    logo: ADAPTER_LOGOS['gemini-3.1-flash-image-preview'],
+    logo: ADAPTER_LOGOS['nano-banana-2'],
   },
   {
-    id: 'gemini-3.1-flash-image-preview-2k',
+    id: 'nano-banana-2-2k',
     name: 'Nano Banana 2 2K',
-    description: 'Google Gemini 3.1 Flash 图像预览，2K 输出',
-    adapterKey: 'gemini-3.1-flash-image-preview',
+    description: 'Nano Banana 2，2K 输出',
+    adapterKey: 'nano-banana-2',
     maxPromptLength: 4000,
     supportedRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '21:9'],
-    logo: ADAPTER_LOGOS['gemini-3.1-flash-image-preview'],
+    logo: ADAPTER_LOGOS['nano-banana-2'],
   },
   {
-    id: 'gemini-3.1-flash-image-preview-4k',
+    id: 'nano-banana-2-4k',
     name: 'Nano Banana 2 4K',
-    description: 'Google Gemini 3.1 Flash 图像预览，4K 输出',
-    adapterKey: 'gemini-3.1-flash-image-preview',
+    description: 'Nano Banana 2，4K 输出',
+    adapterKey: 'nano-banana-2',
     maxPromptLength: 4000,
     supportedRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '21:9'],
-    logo: ADAPTER_LOGOS['gemini-3.1-flash-image-preview'],
+    logo: ADAPTER_LOGOS['nano-banana-2'],
   },
   {
     id: 'nano-banana-pro',
     name: 'Nano Banana Pro',
-    description: 'nano-banana-2 Pro，支持多比例输出',
-    adapterKey: 'nano-banana-2',
+    description: 'Nano Banana Pro，支持多比例输出',
+    adapterKey: 'nano-banana-pro',
     maxPromptLength: 4000,
     supportedRatios: ['4:3', '3:4', '16:9', '9:16', '1:1', '4:5', '5:4', '21:9'],
-    logo: ADAPTER_LOGOS['nano-banana-2'],
+    logo: ADAPTER_LOGOS['nano-banana-pro'],
   },
   {
     id: 'nano-banana-pro-2k',
     name: 'Nano Banana Pro 2K',
-    description: 'nano-banana-2 Pro，固定 2K 输出',
-    adapterKey: 'nano-banana-2',
+    description: 'Nano Banana Pro，固定 2K 输出',
+    adapterKey: 'nano-banana-pro',
     maxPromptLength: 4000,
     supportedRatios: ['4:3', '3:4', '16:9', '9:16', '1:1', '4:5', '5:4', '21:9'],
-    logo: ADAPTER_LOGOS['nano-banana-2'],
+    logo: ADAPTER_LOGOS['nano-banana-pro'],
   },
   {
     id: 'nano-banana-pro-4k',
     name: 'Nano Banana Pro 4K',
-    description: 'nano-banana-2 Pro，固定 4K 输出',
-    adapterKey: 'nano-banana-2',
+    description: 'Nano Banana Pro，固定 4K 输出',
+    adapterKey: 'nano-banana-pro',
     maxPromptLength: 4000,
     supportedRatios: ['4:3', '3:4', '16:9', '9:16', '1:1', '4:5', '5:4', '21:9'],
-    logo: ADAPTER_LOGOS['nano-banana-2'],
+    logo: ADAPTER_LOGOS['nano-banana-pro'],
   },
 ]
 
 // Adapter key → class constructor (factory map)
 const ADAPTER_MAP: Record<string, new () => BaseModelAdapter> = {
   'nano-banana-2': NanoBanana2Adapter,
-  'gemini-3.1-flash-image-preview': NanoBanana3FlashAdapter,
+  'nano-banana-pro': NanoBanana3FlashAdapter,
   'gpt-image-2': GptImage2Adapter,
 }
 
@@ -148,4 +148,23 @@ export function resolveModelAdapter(modelId: string): BaseModelAdapter {
  */
 export function getModelConfig(modelId: string): ModelConfig | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === modelId)
+}
+
+/**
+ * Extracts the resolution tier from a model id.
+ * Examples:
+ *   'nano-banana-pro-4k'          → '4k'
+ *   'nano-banana-pro-2k'          → '2k'
+ *   'nano-banana-pro'             → '1k'
+ *   'nano-banana-2-4k'            → '4k'
+ *   'nano-banana-2-2k'            → '2k'
+ *   'nano-banana-2'               → '1k'
+ *   'gpt-image-2-4k'             → '4k'
+ *   'gpt-image-2-2k'             → '2k'
+ *   'gpt-image-2'                 → '1k'
+ */
+export function resolveModelTier(modelId: string): '1k' | '2k' | '4k' {
+  if (modelId.endsWith('-4k')) return '4k'
+  if (modelId.endsWith('-2k')) return '2k'
+  return '1k'
 }

@@ -1,6 +1,7 @@
 import { BaseModelAdapter } from '../BaseModelAdapter'
 import type { GenerateImageParams, GenerateImageResponse } from '../types'
 import { getBaseUrl, getHeaders, b64JsonToBlob, pollTask } from '../adapterUtils'
+import { DEFAULT_RESOLUTION_TIER } from '../types'
 
 /**
  * gpt-image-2 — converts ratio + tier to pixel dimensions respecting constraints:
@@ -40,7 +41,7 @@ export class GptImage2Adapter extends BaseModelAdapter {
   async generate(params: GenerateImageParams): Promise<GenerateImageResponse> {
     this.validateParams(params)
 
-    const tier: '1k' | '2k' | '4k' = '1k'
+    const tier = params.tier ?? DEFAULT_RESOLUTION_TIER
 
     const headers = getHeaders()
     const baseUrl = getBaseUrl()
@@ -65,7 +66,8 @@ export class GptImage2Adapter extends BaseModelAdapter {
     try {
       taskInfo = await res.json()
     } catch {
-      const text = await res.text().catch(() => '')
+      const rawRes = res.clone()
+      const text = await rawRes.text().catch(() => '')
       throw new Error(`响应解析失败: ${res.status} ${text}`.slice(0, 200))
     }
 
@@ -101,6 +103,6 @@ export class GptImage2Adapter extends BaseModelAdapter {
     }
 
     console.log('[DEBUG-GPT2] generate() returning blob, size:', blob.size, 'type:', blob.type)
-    return { blob, mimeType: blob.type, modelId: this.modelId }
+    return { blob, mimeType: blob.type, modelId: this.modelId, taskId }
   }
 }

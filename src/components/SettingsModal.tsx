@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Key, Globe, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { X, Key, Globe, Loader2, CheckCircle, XCircle, ImageIcon } from 'lucide-react'
 import { useSettingsStore } from '../store/settingsStore'
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 type TestStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export default function SettingsModal({ open, onClose }: Props) {
-  const { apiKey, baseUrl, setApiKey, setBaseUrl, testConnection, fetchQuota } = useSettingsStore()
+  const { apiKey, baseUrl, autoSaveGallery, setApiKey, setBaseUrl, setAutoSaveGallery, testConnection, fetchQuota } = useSettingsStore()
   const [localKey, setLocalKey] = useState('')
   const [localUrl, setLocalUrl] = useState('')
   const [testStatus, setTestStatus] = useState<TestStatus>('idle')
@@ -131,6 +131,31 @@ export default function SettingsModal({ open, onClose }: Props) {
               存储在浏览器本地，不会被上传至任何服务器
             </p>
           </div>
+
+          {/* Auto-save gallery toggle */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-zinc-600">
+              <ImageIcon size={14} strokeWidth={2.5} />
+              自动保存生成图片
+            </div>
+            <button
+              onClick={() => setAutoSaveGallery(!autoSaveGallery)}
+              className={`
+                relative inline-flex h-6 w-10 items-center rounded-full transition-colors
+                ${autoSaveGallery ? 'bg-zinc-900' : 'bg-zinc-200'}
+              `}
+            >
+              <span
+                className={`
+                  inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform
+                  ${autoSaveGallery ? 'translate-x-5' : 'translate-x-1'}
+                `}
+              />
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-400 -mt-3">
+            生成的图片自动保存到素材库
+          </p>
 
           {/* Test result message */}
           {testMessage && (

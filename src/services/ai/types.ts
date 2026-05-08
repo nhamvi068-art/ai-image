@@ -1,3 +1,8 @@
+// ─── Resolution tier ──────────────────────────────────────────────────────────
+
+type ResolutionTier = '1k' | '2k' | '4k'
+export const DEFAULT_RESOLUTION_TIER: ResolutionTier = '2k'
+
 // ─── Parameter & Response types ─────────────────────────────────────────────
 
 export interface GenerateImageParams {
@@ -6,6 +11,8 @@ export interface GenerateImageParams {
   ratio?: string
   /** Reference image URLs or base64 strings (optional) */
   imageUrls?: string[]
+  /** Resolution tier for models that support it (optional, defaults to '2k') */
+  tier?: ResolutionTier
   /** Additional model-specific options */
   [key: string]: unknown
 }
@@ -17,6 +24,8 @@ export interface GenerateImageResponse {
   mimeType: string
   /** Human-readable model identifier that generated this image */
   modelId: string
+  /** Task ID for recovery if polling fails */
+  taskId: string
 }
 
 // ─── Model configuration ──────────────────────────────────────────────────────

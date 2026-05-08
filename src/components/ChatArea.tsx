@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { AVAILABLE_MODELS } from '../services/ai/ModelRegistry'
-import { Edit3, MoreHorizontal, Loader2, Copy, Check, Trash2 } from 'lucide-react'
+import { Edit3, MoreHorizontal, Loader2, Copy, Check, Trash2, RefreshCw } from 'lucide-react'
 
 // ─── Date Divider ───────────────────────────────────────────────────────────────
 
@@ -86,11 +86,32 @@ function CopyableImage({ src, alt, onZoom, className, onImageLoad, showCopyButto
 function ImageItem({ src, onZoom }: { src: string; onZoom: (src: string) => void }) {
   const [colSpan, setColSpan] = useState(1)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // IntersectionObserver: defer actual render until the image card is near the viewport.
+  // The data URL is already in memory (from listMessages), so this only defers DOM
+  // creation and <img> decoding — no network request is saved, but JS main thread is freed.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsLoaded(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px' }  // pre-load slightly before the image scrolls into view
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [])
 
   const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -105,10 +126,16 @@ function ImageItem({ src, onZoom }: { src: string; onZoom: (src: string) => void
 
   return (
     <div
+      ref={containerRef}
       className="overflow-hidden rounded-2xl bg-zinc-100 border border-zinc-100"
       style={{ gridColumn: `span ${colSpan}` }}
     >
-      <CopyableImage src={src} alt="生成图片" onZoom={onZoom} className="w-full h-auto object-contain rounded-xl" onImageLoad={handleLoad} />
+      {isLoaded ? (
+        <CopyableImage src={src} alt="生成图片" onZoom={onZoom} className="w-full h-auto object-contain rounded-xl" onImageLoad={handleLoad} />
+      ) : (
+        // Skeleton placeholder — same aspect ratio hint so layout doesn't shift
+        <div className="w-full aspect-[3/4] bg-zinc-200 animate-pulse rounded-xl" />
+      )}
     </div>
   )
 }
@@ -125,9 +152,11 @@ interface GenerationItemProps {
   errorMessage?: string
   modelId: string | null
   ratio: string
+  taskIds?: Record<string, string>
   onZoom: (src: string) => void
   onEdit: (prompt: string, referenceImages: string[], ratio: string) => void
   onDelete: (userMsgId: number, assistantMsgId: number) => void
+  onRecover?: (userMsgId: number, assistantMsgId: number, taskId: string) => void
 }
 
 function GenerationItem({
@@ -139,13 +168,17 @@ function GenerationItem({
   generatedImages,
   errorMessage,
   ratio,
+  taskIds,
   onZoom,
   onEdit,
   onDelete,
+  onRecover,
 }: GenerationItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const isError = !!errorMessage
+  const hasRecoverable = taskIds && Object.keys(taskIds).length > 0
+  const [recoveringKey, setRecoveringKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -191,8 +224,35 @@ function GenerationItem({
 
         {/* Error Message */}
         {isError && (
-          <div className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-            {errorMessage}
+          <div className="flex flex-col gap-2">
+            <div className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+              {errorMessage}
+            </div>
+            {hasRecoverable ? (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(taskIds!).map(([key, taskId]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setRecoveringKey(key)
+                      onRecover?.(userMsgId, assistantMsgId, taskId)
+                    }}
+                    disabled={recoveringKey !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {recoveringKey === key
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <RefreshCw className="w-3.5 h-3.5" />
+                    }
+                    {recoveringKey === key ? '恢复中...' : `恢复图片 ${key.replace('gen_', '#')}`}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[12px] text-zinc-400 italic">
+                [taskIds: {JSON.stringify(taskIds)}]
+              </div>
+            )}
           </div>
         )}
 
@@ -256,7 +316,7 @@ function GenerationItem({
 // ─── Chat Area ─────────────────────────────────────────────────────────────────
 
 export default function ChatArea() {
-  const { messages, currentSessionId, isLoading, isSessionLoading, activeRatio, imageCount, selectedModelId } = useChatStore()
+  const { messages, currentSessionId, isLoading, isSessionLoading, activeRatio, imageCount, selectedModelId, generationProgress } = useChatStore()
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -320,56 +380,80 @@ export default function ChatArea() {
       const userMsg = messages[i]
       const assistantMsg = messages[i + 1]
 
-      if (isLoading && i + 2 >= messages.length) break
+        if (isLoading && i + 2 >= messages.length) break
 
-      if (userMsg?.role === 'user' && userMsg.type === 'text') {
-        let generatedUrls: string[] = []
-        let tags = ''
-        let errorMessage: string | undefined
+        if (userMsg?.role === 'user' && userMsg.type === 'text') {
+          let generatedUrls: string[] = []
+          let tags = ''
+          let errorMessage: string | undefined
+          let taskIds: Record<string, string> | undefined
 
-        if (assistantMsg?.role === 'assistant' && assistantMsg.type === 'image') {
-          const content = assistantMsg.content
-          if (Array.isArray(content)) {
-            content.forEach(blob => {
-              const url = URL.createObjectURL(blob)
-              generatedUrls.push(url)
+          if (assistantMsg?.role === 'assistant' && assistantMsg.type === 'image') {
+            // Prefer partial Blob[] from generationProgress (updated per-image),
+            // fall back to assistantMsg.content (data URLs or final Blobs)
+            const isLiveGeneration = isLoading && i + 2 >= messages.length
+            const partialBlobs = isLiveGeneration ? (generationProgress[String(assistantMsg.id)] ?? []) : []
+            const content = partialBlobs.length > 0 ? partialBlobs : assistantMsg.content
+
+            if (Array.isArray(content)) {
+              // Support Blob[] (live generation), string[] (restored from IndexedDB as data URLs),
+              // and (Blob | null)[] (in-progress placeholder with empty slots)
+              for (const item of content) {
+                if (item === null) continue
+                if (typeof item === 'string' && item.startsWith('data:')) {
+                  generatedUrls.push(item)
+                } else if (item instanceof Blob) {
+                  const url = URL.createObjectURL(item)
+                  generatedUrls.push(url)
+                  blobUrlsRef.current.push(url)
+                }
+              }
+            } else if (typeof content === 'string' && content.startsWith('data:')) {
+              // Restored from IndexedDB as a single data URL string
+              generatedUrls = [content]
+            } else if (content instanceof Blob) {
+              const url = URL.createObjectURL(content)
+              generatedUrls = [url]
               blobUrlsRef.current.push(url)
-            })
-          } else if (content instanceof Blob) {
-            const url = URL.createObjectURL(content)
-            generatedUrls = [url]
-            blobUrlsRef.current.push(url)
+            }
+            const model = AVAILABLE_MODELS.find(m => m.id === assistantMsg.modelId)
+            const ratio = userMsg.ratio ?? '1:1'
+            tags = `${model?.name ?? assistantMsg.modelId ?? ''} | ${ratio}`
+            taskIds = assistantMsg.taskIds
+          } else if (assistantMsg?.role === 'assistant' && assistantMsg.type === 'text') {
+            errorMessage = assistantMsg.content as string
+            taskIds = assistantMsg.taskIds
           }
-          const model = AVAILABLE_MODELS.find(m => m.id === assistantMsg.modelId)
-          const ratio = userMsg.ratio ?? '1:1'
-          tags = `${model?.name ?? assistantMsg.modelId ?? ''} | ${ratio}`
-        } else if (assistantMsg?.role === 'assistant' && assistantMsg.type === 'text') {
-          errorMessage = assistantMsg.content as string
-        }
 
-        items.push({
-          userMsgId: userMsg.id!,
-          assistantMsgId: assistantMsg?.id ?? 0,
-          referenceImages: userMsg.referenceImages ?? [],
-          promptText: userMsg.content as string,
-          tags,
-          generatedImages: generatedUrls,
-          errorMessage,
-          modelId: assistantMsg?.modelId ?? null,
-          ratio: userMsg.ratio ?? '1:1',
-          onZoom: setZoomedImage,
-          onEdit: (prompt: string, refImgs: string[], ratio: string) =>
-            useChatStore.getState().editPrompt(prompt, { referenceImages: refImgs, ratio }),
-          onDelete: (userMsgId: number, assistantMsgId: number) =>
-            useChatStore.getState().deleteGenerationBatch(userMsgId, assistantMsgId),
-        })
+          items.push({
+            userMsgId: userMsg.id!,
+            assistantMsgId: assistantMsg?.id ?? 0,
+            referenceImages: userMsg.referenceImages ?? [],
+            promptText: userMsg.content as string,
+            tags,
+            generatedImages: generatedUrls,
+            errorMessage,
+            modelId: assistantMsg?.modelId ?? null,
+            ratio: userMsg.ratio ?? '1:1',
+            taskIds,
+            onZoom: setZoomedImage,
+            onEdit: (prompt: string, refImgs: string[], ratio: string) =>
+              useChatStore.getState().editPrompt(prompt, { referenceImages: refImgs, ratio }),
+            onDelete: (userMsgId: number, assistantMsgId: number) =>
+              useChatStore.getState().deleteGenerationBatch(userMsgId, assistantMsgId),
+            onRecover: (userMsgId: number, assistantMsgId: number, taskId: string) =>
+              useChatStore.getState().recoverFailedImage(userMsgId, assistantMsgId, taskId),
+          })
       }
     }
     return items
-  }, [messages.length])
+  }, [messages, generationProgress])
 
   const isNewChat = !currentSessionId || (generationItems.length === 0 && !isLoading)
-  const lastUserMessage = messages.length > 0 ? messages[messages.length - 1] : null
+  // lastUserMessage: the most recent user message (last even index when loading, or last element otherwise)
+  const lastUserMessage = messages.length > 0
+    ? (isLoading && messages.length >= 2 ? messages[messages.length - 2] : messages[messages.length - 1])
+    : null
 
   return (
     <>

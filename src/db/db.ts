@@ -18,6 +18,26 @@ export interface Message {
   referenceImages: string[]
   ratio: string | null
   createdAt: Date
+  /** taskId(s) for recovery: key is a unique index per generated image within this message */
+  taskIds?: Record<string, string>
+}
+
+export interface GalleryImage {
+  id?: number
+  src: string
+  prompt: string
+  modelId: string | null
+  ratio: string
+  sessionId: number
+  isFavorite: boolean
+  createdAt: Date
+}
+
+export interface ReferenceImage {
+  id?: number
+  src: string
+  name: string
+  createdAt: Date
 }
 
 // ─── Database ───────────────────────────────────────────────────────────────
@@ -25,6 +45,8 @@ export interface Message {
 export class OpenTuDB extends Dexie {
   sessions!: Table<Session, number>
   messages!: Table<Message, number>
+  galleryImages!: Table<GalleryImage, number>
+  referenceImages!: Table<ReferenceImage, number>
 
   constructor() {
     super('OpenTuDB')
@@ -39,6 +61,18 @@ export class OpenTuDB extends Dexie {
     }).upgrade(tx => tx.table('messages').toCollection().modify(msg => {
       if (msg.ratio === undefined) msg.ratio = null
     }))
+    this.version(4).stores({
+      sessions: '++id, updatedAt',
+      messages: '++id, sessionId, role, type, createdAt, referenceImage, ratio',
+      galleryImages: '++id, isFavorite, createdAt',
+      referenceImages: '++id, createdAt',
+    })
+    this.version(5).stores({
+      sessions: '++id, updatedAt',
+      messages: '++id, sessionId, role, type, createdAt, referenceImage, ratio, taskIds',
+      galleryImages: '++id, isFavorite, createdAt',
+      referenceImages: '++id, createdAt',
+    })
   }
 }
 
@@ -114,14 +148,43 @@ export async function deleteSession(id: number): Promise<void> {
 
 export async function addMessage(msg: Omit<Message, 'id'>): Promise<number> {
   const useIdb = await checkIdbHealth()
+
+  // Clone to avoid mutating the caller's object
+  let toSave: Message = { ...msg }
+
+  // IndexedDB cannot store Blob — convert to data URL for persistence
   if (useIdb) {
-    const id = (await db.messages.add(msg as Message)) as number
+    const convertToDataUrl = async (blob: Blob): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+    }
+    if (Array.isArray(toSave.content)) {
+      const urls: string[] = []
+      for (const item of toSave.content) {
+        if (item instanceof Blob) {
+          urls.push(await convertToDataUrl(item))
+        } else {
+          urls.push(item as string)
+        }
+      }
+      toSave = { ...toSave, content: urls }
+    } else if (toSave.content instanceof Blob) {
+      toSave = { ...toSave, content: await convertToDataUrl(toSave.content) }
+    }
+  }
+
+  if (useIdb) {
+    const id = (await db.messages.add(toSave)) as number
     await db.sessions.update(msg.sessionId, { updatedAt: new Date() })
     return id
   }
 
   const id = nextMessageId++
-  const full: Message = { ...msg, id }
+  const full: Message = { ...toSave, id }
   memMessages.set(id, full)
 
   const session = memSessions.get(msg.sessionId)
@@ -151,4 +214,60 @@ export async function deleteMessages(ids: number[]): Promise<void> {
   }
 
   ids.forEach(id => memMessages.delete(id))
+}
+
+export async function updateMessage(id: number, patch: Partial<Message>): Promise<void> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) {
+    await db.messages.update(id, patch)
+    return
+  }
+
+  const msg = memMessages.get(id)
+  if (msg) memMessages.set(id, { ...msg, ...patch })
+}
+
+// ─── Gallery images ─────────────────────────────────────────────────────────
+
+export async function addGalleryImage(img: Omit<GalleryImage, 'id'>): Promise<number> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) return (await db.galleryImages.add(img as GalleryImage)) as number
+  return Date.now()
+}
+
+export async function deleteGalleryImage(id: number): Promise<void> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) await db.galleryImages.delete(id)
+}
+
+export async function getAllGalleryImages(): Promise<GalleryImage[]> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) return db.galleryImages.orderBy('createdAt').reverse().toArray()
+  return []
+}
+
+export async function toggleGalleryFavorite(id: number): Promise<void> {
+  const useIdb = await checkIdbHealth()
+  if (!useIdb) return
+  const img = await db.galleryImages.get(id)
+  if (img) await db.galleryImages.update(id, { isFavorite: !img.isFavorite })
+}
+
+// ─── Reference images ───────────────────────────────────────────────────────
+
+export async function addReferenceImage(img: Omit<ReferenceImage, 'id'>): Promise<number> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) return (await db.referenceImages.add(img as ReferenceImage)) as number
+  return Date.now()
+}
+
+export async function deleteReferenceImage(id: number): Promise<void> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) await db.referenceImages.delete(id)
+}
+
+export async function getAllReferenceImages(): Promise<ReferenceImage[]> {
+  const useIdb = await checkIdbHealth()
+  if (useIdb) return db.referenceImages.orderBy('createdAt').reverse().toArray()
+  return []
 }

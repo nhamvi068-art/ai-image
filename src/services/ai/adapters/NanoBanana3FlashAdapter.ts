@@ -1,6 +1,13 @@
 import { BaseModelAdapter } from '../BaseModelAdapter'
 import type { GenerateImageParams, GenerateImageResponse } from '../types'
 import { getBaseUrl, getHeaders, b64JsonToBlob, pollTask } from '../adapterUtils'
+import { DEFAULT_RESOLUTION_TIER } from '../types'
+
+function resolveNb3FlashModel(tier: string): string {
+  if (tier === '4k') return 'nano-banana-pro-4k'
+  if (tier === '2k') return 'nano-banana-pro-2k'
+  return 'nano-banana-pro'
+}
 
 /** nano-banana-3.1-Flash (gemini-3.1-flash-image-preview) — async generations */
 export class NanoBanana3FlashAdapter extends BaseModelAdapter {
@@ -8,11 +15,13 @@ export class NanoBanana3FlashAdapter extends BaseModelAdapter {
 
   async generate(params: GenerateImageParams): Promise<GenerateImageResponse> {
     this.validateParams(params)
+    const tier = params.tier ?? DEFAULT_RESOLUTION_TIER
+    const modelName = resolveNb3FlashModel(tier)
     const headers = getHeaders()
     const baseUrl = getBaseUrl()
 
     const body: Record<string, unknown> = {
-      model: 'gemini-3.1-flash-image-preview',
+      model: modelName,
       prompt: params.prompt,
       response_format: 'b64_json',
     }
@@ -61,6 +70,6 @@ export class NanoBanana3FlashAdapter extends BaseModelAdapter {
       throw new Error('API 响应中无图像数据')
     }
 
-    return { blob, mimeType: blob.type, modelId: this.modelId }
+    return { blob, mimeType: blob.type, modelId: this.modelId, taskId }
   }
 }

@@ -1,6 +1,13 @@
 import { BaseModelAdapter } from '../BaseModelAdapter'
 import type { GenerateImageParams, GenerateImageResponse } from '../types'
 import { getBaseUrl, getHeaders, b64JsonToBlob, pollTask } from '../adapterUtils'
+import { DEFAULT_RESOLUTION_TIER } from '../types'
+
+function resolveNb2Model(tier: string): string {
+  if (tier === '4k') return 'gemini-3.1-flash-image-preview-4k'
+  if (tier === '2k') return 'gemini-3.1-flash-image-preview-2k'
+  return 'gemini-3.1-flash-image-preview-512px'
+}
 
 /** nano-banana-2 (Pro) — async generations */
 export class NanoBanana2Adapter extends BaseModelAdapter {
@@ -8,11 +15,16 @@ export class NanoBanana2Adapter extends BaseModelAdapter {
 
   async generate(params: GenerateImageParams): Promise<GenerateImageResponse> {
     this.validateParams(params)
+    const tier = params.tier ?? DEFAULT_RESOLUTION_TIER
+    const modelName = resolveNb2Model(tier)
+    // #region agent log
+    fetch('http://127.0.0.1:7252/ingest/f0ec8a8c-1b3f-43cf-b3aa-e816736c30f5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9f09f2'},body:JSON.stringify({sessionId:'9f09f2',location:'NanoBanana2Adapter.ts:19',message:'NB2 adapter generate() called',data:{modelId:this.modelId,tier,modelName},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const headers = getHeaders()
     const baseUrl = getBaseUrl()
 
     const body: Record<string, unknown> = {
-      model: 'nano-banana-2',
+      model: modelName,
       prompt: params.prompt,
       response_format: 'b64_json',
     }
@@ -67,6 +79,6 @@ export class NanoBanana2Adapter extends BaseModelAdapter {
     }
 
     console.log('[DEBUG-NB2] generate() returning blob, size:', blob.size, 'type:', blob.type)
-    return { blob, mimeType: blob.type, modelId: this.modelId }
+    return { blob, mimeType: blob.type, modelId: this.modelId, taskId }
   }
 }

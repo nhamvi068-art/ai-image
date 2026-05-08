@@ -6,10 +6,12 @@ interface SettingsStore {
   quota: number | null
   quotaLoading: boolean
   quotaError: string | null
+  autoSaveGallery: boolean
   setApiKey: (key: string) => void
   setBaseUrl: (url: string) => void
   getHeaders: () => Record<string, string>
   fetchQuota: () => Promise<void>
+  setAutoSaveGallery: (val: boolean) => void
   testConnection: (url: string, key: string) => Promise<{ success: boolean; quota?: number; error?: string }>
 }
 
@@ -42,6 +44,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   quota: loadNumberFromStorage('actum_quota'),
   quotaLoading: false,
   quotaError: null,
+  autoSaveGallery: loadFromStorage('actum_auto_save_gallery') !== 'false',
 
   setApiKey: (key: string) => {
     saveToStorage('actum_api_key', key)
@@ -51,6 +54,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setBaseUrl: (url: string) => {
     saveToStorage('actum_base_url', url)
     set({ baseUrl: url })
+  },
+
+  setAutoSaveGallery: (val: boolean) => {
+    saveToStorage('actum_auto_save_gallery', val ? 'true' : 'false')
+    set({ autoSaveGallery: val })
   },
 
   getHeaders: () => {

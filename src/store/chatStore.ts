@@ -1,8 +1,18 @@
 import { create } from 'zustand'
-import { addMessage, listMessages, listSessions, createSession, deleteSession, deleteMessages, type Session, type Message } from '../db/db'
-import { resolveModelAdapter, AVAILABLE_MODELS } from '../services/ai/ModelRegistry'
+import { addMessage, listMessages, listSessions, createSession, deleteSession, deleteMessages, addGalleryImage, updateMessage, type Session, type Message } from '../db/db'
+import { resolveModelAdapter, resolveModelTier, AVAILABLE_MODELS } from '../services/ai/ModelRegistry'
+import { getBaseUrl, getHeaders, fetchTaskDirect, b64JsonToBlob } from '../services/ai/adapterUtils'
 
 // ─── Theme helpers ─────────────────────────────────────────────────────────────
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
 
 function applyDarkMode(isDark: boolean) {
   if (isDark) {
@@ -50,6 +60,10 @@ interface ChatStore {
   // ── Generation phase ─────────────────────────────────────────────────────────
   generationPhase: 'idle' | 'waiting' | 'generating'
 
+  // ── Partial generation results (keyed by assistantMsgId) ─────────────────────
+  // Used so ChatArea can render each image as it completes, not just at the end
+  generationProgress: Record<string, Blob[]>
+
   // ── UI actions ──────────────────────────────────────────────────────────────
   toggleSidebar: () => void
   toggleTheme: () => void
@@ -65,6 +79,9 @@ interface ChatStore {
   // ── Core message action ────────────────────────────────────────────────────
   sendMessageWithImage: (prompt: string, referenceImages: string[]) => Promise<void>
 
+  // ── Recovery ──────────────────────────────────────────────────────────────
+  recoverFailedImage: (userMsgId: number, assistantMsgId: number, taskId: string) => Promise<void>
+
   // ── Model selection ─────────────────────────────────────────────────────────
   setSelectedModel: (modelId: string) => void
 
@@ -76,6 +93,7 @@ interface ChatStore {
   setEditRatio: (ratio: string) => void
   clearEditPrompt: () => void
   deleteGenerationBatch: (userMsgId: number, assistantMsgId: number) => Promise<void>
+  restoreImageToChat: (galleryImage: { src: string; prompt: string; modelId: string | null; ratio: string; sessionId: number }) => Promise<void>
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -111,6 +129,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     // ── Generation phase defaults ───────────────────────────────────────────────
     generationPhase: 'idle',
+
+    // ── Partial generation results ─────────────────────────────────────────────
+    generationProgress: {},
 
     // ── UI actions ─────────────────────────────────────────────────────────────
 
@@ -216,44 +237,101 @@ export const useChatStore = create<ChatStore>((set, get) => {
         set((_state) => ({ messages: [..._state.messages, userMsg], isLoading: true, generationPhase: 'waiting' }))
 
         const adapter = resolveModelAdapter(selectedModelId)
+        const tier = resolveModelTier(selectedModelId)
         const imageUrls = referenceImages.length > 0 ? referenceImages : undefined
 
         set({ generationPhase: 'generating' })
 
-        // Concurrent generation of N images — use allSettled so partial success is preserved
-        const generatePromises = Array.from({ length: imageCount }, () =>
-          adapter.generate({ prompt, ratio: currentRatio, imageUrls })
-        )
-        const settled = await Promise.allSettled(generatePromises)
-        const blobs: Blob[] = []
-        const failedErrors: string[] = []
-        for (const result of settled) {
-          if (result.status === 'fulfilled') {
-            blobs.push(result.value.blob)
-          } else {
-            const msg = result.reason instanceof Error ? result.reason.message : String(result.reason)
-            failedErrors.push(msg)
-            console.error('[ChatStore] One image generation failed:', msg)
-          }
+        // Track results per image slot
+        const blobs: (Blob | null)[] = new Array(imageCount).fill(null)
+        const taskIds: (string | null)[] = new Array(imageCount).fill(null)
+        const errors: (string | null)[] = new Array(imageCount).fill(null)
+
+        // Place a "pending" assistant message in store only (no IDB yet) so UI can show slots immediately.
+        // We will persist it to IndexedDB only once generation is complete — this avoids the bug where
+        // a failed/partial generation leaves stale null-content records in IDB.
+        let assistantMsgId = -1  // temporary negative ID, never written to IDB during generation
+        const assistantMsgPlaceholder: Message = {
+          id: assistantMsgId,
+          sessionId,
+          role: 'assistant',
+          type: 'image',
+          content: blobs,
+          modelId: selectedModelId,
+          referenceImages: [],
+          ratio: currentRatio,
+          createdAt: new Date(),
+          taskIds: {},
+        }
+        set((_state) => ({ messages: [..._state.messages, assistantMsgPlaceholder] }))
+
+        // Function to sync the assistant message into the store (UI only, no DB persistence)
+        // Also writes to generationProgress so ChatArea can pick up partial results
+        const syncToStore = () => {
+          const partialBlobs = blobs.filter(Boolean) as Blob[]
+          set((_state) => {
+            const idx = _state.messages.findIndex(m => m.id === assistantMsgId)
+            const updated = [..._state.messages]
+            if (idx !== -1) {
+              updated[idx] = {
+                ...updated[idx],
+                content: partialBlobs,
+                taskIds: Object.fromEntries(
+                  taskIds
+                    .map((id, i) => (id !== null ? [`gen_${i}`, id] : null))
+                    .filter((e): e is [string, string] => e !== null)
+                ),
+              }
+            }
+            return {
+              messages: updated,
+              generationProgress: {
+                ..._state.generationProgress,
+                [String(assistantMsgId)]: partialBlobs,
+              },
+            }
+          })
         }
 
-        // If no image succeeded, show error message
-        if (blobs.length === 0) {
-          const errorMessage = failedErrors.length > 0 ? failedErrors[0] : '生成失败'
-          set({ isLoading: false, generationPhase: 'idle' })
+        // Generate images ONE AT A TIME so each result immediately updates the UI
+        for (let i = 0; i < imageCount; i++) {
           try {
-            const errorMsgId = await addMessage({
-              sessionId,
-              role: 'assistant',
-              type: 'text',
-              content: `生成失败: ${errorMessage}`,
-              modelId: selectedModelId,
-              referenceImages: [],
-              ratio: currentRatio,
-              createdAt: new Date(),
-            })
-            set((_state) => ({
-              messages: [..._state.messages, {
+            const result = await adapter.generate({ prompt, ratio: currentRatio, imageUrls, tier })
+            blobs[i] = result.blob
+            taskIds[i] = result.taskId
+            console.log(`[ChatStore] Image ${i} generated, taskId: ${result.taskId}`)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            errors[i] = msg
+            console.error(`[ChatStore] Image ${i} failed:`, msg)
+          }
+
+          // Immediately sync partial results to UI (store only, no DB persistence)
+          syncToStore()
+        }
+
+        const successfulCount = blobs.filter(Boolean).length
+        const failedErrors = errors.filter(Boolean) as string[]
+
+        // If no image succeeded at all, replace with an error message
+        if (successfulCount === 0) {
+          const errorMessage = failedErrors[0] ?? '生成失败'
+          const errorMsgId = await addMessage({
+            sessionId,
+            role: 'assistant',
+            type: 'text',
+            content: `生成失败: ${errorMessage}`,
+            modelId: selectedModelId,
+            referenceImages: [],
+            ratio: currentRatio,
+            createdAt: new Date(),
+          })
+          set((_state) => {
+            const idx = _state.messages.findIndex(m => m.id === assistantMsgId)
+            const updated = [..._state.messages]
+            if (idx !== -1) updated.splice(idx, 1)
+            return {
+              messages: [...updated, {
                 id: errorMsgId,
                 sessionId,
                 role: 'assistant',
@@ -264,52 +342,93 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 ratio: currentRatio,
                 createdAt: new Date(),
               } as Message],
-            }))
-          } catch (dbErr) {
-            console.error('[ChatStore] Failed to save error message to DB:', dbErr)
-            set((_state) => ({
-              messages: [..._state.messages, {
-                id: Date.now(),
-                sessionId,
-                role: 'assistant',
-                type: 'text',
-                content: `生成失败: ${errorMessage}`,
-                modelId: selectedModelId,
-                referenceImages: [],
-                ratio: currentRatio,
-                createdAt: new Date(),
-              } as Message],
-            }))
-          }
+              isLoading: false,
+              generationPhase: 'idle',
+            }
+          })
           const sessions = await listSessions()
           set({ sessions })
           return
         }
 
-        const assistantMsgId = await addMessage({
+        // Final sync: persist to IndexedDB only now (after all images are done).
+        // Writing to IDB only here avoids stale partial-content records when generation fails.
+        const blobsToDataUrls = async (blobList: Blob[]): Promise<string[]> => {
+          return Promise.all(blobList.map(blob => new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })))
+        }
+        const dataUrlContent = await blobsToDataUrls(blobs.filter(Boolean) as Blob[])
+        const realMsgId = await addMessage({
           sessionId,
           role: 'assistant',
           type: 'image',
-          content: blobs.length === 1 ? blobs[0] : blobs,
+          content: dataUrlContent,
           modelId: selectedModelId,
           referenceImages: [],
           ratio: currentRatio,
           createdAt: new Date(),
+          taskIds: Object.fromEntries(
+            taskIds
+              .map((id, i) => (id !== null ? [`gen_${i}`, id] : null))
+              .filter((e): e is [string, string] => e !== null)
+          ) || undefined,
         })
 
-        const assistantMsg: Message = {
-          id: assistantMsgId,
-          sessionId,
-          role: 'assistant',
-          type: 'image',
-          content: blobs.length === 1 ? blobs[0] : blobs,
-          modelId: selectedModelId,
-          referenceImages: [],
-          ratio: currentRatio,
-          createdAt: new Date(),
+        set((_state) => {
+          // Replace placeholder (negative ID) with the real IDB ID
+          const updated = _state.messages.filter(m => m.id !== assistantMsgId)
+          const { [String(assistantMsgId)]: _removed, ...restProgress } = _state.generationProgress
+          return {
+            messages: [...updated, {
+              id: realMsgId,
+              sessionId,
+              role: 'assistant',
+              type: 'image',
+              content: dataUrlContent,
+              modelId: selectedModelId,
+              referenceImages: [],
+              ratio: currentRatio,
+              createdAt: new Date(),
+              taskIds: Object.fromEntries(
+                taskIds
+                  .map((id, i) => (id !== null ? [`gen_${i}`, id] : null))
+                  .filter((e): e is [string, string] => e !== null)
+              ) || undefined,
+            } as Message],
+            isLoading: false,
+            generationPhase: 'idle',
+            generationProgress: restProgress,
+          }
+        })
+
+        // Auto-save generated images to gallery — non-blocking
+        const autoSave = localStorage.getItem('actum_auto_save_gallery')
+        if (autoSave !== 'false') {
+          const promptText = prompt.slice(0, 500)
+          const blobsToSave = blobs.filter(Boolean) as Blob[]
+          Promise.allSettled(blobsToSave.map(blob => new Promise<void>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = async () => {
+              const src = reader.result as string
+              await addGalleryImage({
+                src,
+                prompt: promptText,
+                modelId: selectedModelId,
+                ratio: currentRatio,
+                sessionId: sessionId ?? 0,
+                isFavorite: false,
+                createdAt: new Date(),
+              })
+              resolve()
+            }
+            reader.readAsDataURL(blob)
+          }))).catch(e => console.warn('[ChatStore] Gallery save error:', e))
         }
 
-        set((_state) => ({ messages: [..._state.messages, assistantMsg], isLoading: false, generationPhase: 'idle' }))
         const sessions = await listSessions()
         set({ sessions })
       } catch (err) {
@@ -390,6 +509,106 @@ export const useChatStore = create<ChatStore>((set, get) => {
           (m) => m.id !== userMsgId && m.id !== assistantMsgId
         ),
       }))
+    },
+
+    restoreImageToChat: async ({ src, prompt, modelId, ratio, sessionId }) => {
+      const { currentSessionId } = get()
+
+      // If the original session still exists, use it; otherwise create a new one
+      const targetSessionId = sessionId && get().sessions.some(s => s.id === sessionId)
+        ? sessionId
+        : await createSession(prompt.slice(0, 40))
+
+      const userMsgId = await addMessage({
+        sessionId: targetSessionId,
+        role: 'user',
+        type: 'text',
+        content: prompt,
+        modelId,
+        referenceImages: [],
+        ratio: ratio ?? '1:1',
+        createdAt: new Date(),
+      })
+
+      const assistantMsgId = await addMessage({
+        sessionId: targetSessionId,
+        role: 'assistant',
+        type: 'image',
+        content: [src],
+        modelId,
+        referenceImages: [],
+        ratio: ratio ?? '1:1',
+        createdAt: new Date(),
+        taskIds: undefined,
+      })
+
+      // Switch to the session and reload its messages
+      const sessions = await listSessions()
+      const msgs = await listMessages(targetSessionId)
+      set({
+        sessions,
+        currentSessionId: targetSessionId,
+        messages: msgs,
+        isLoading: false,
+        generationPhase: 'idle',
+        isSessionLoading: false,
+      })
+    },
+
+    // ── Recovery ──────────────────────────────────────────────────────────────
+
+    recoverFailedImage: async (userMsgId: number, assistantMsgId: number, taskId: string) => {
+      const { messages, selectedModelId } = get()
+      const userMsg = messages.find(m => m.id === userMsgId)
+      const assistantMsg = messages.find(m => m.id === assistantMsgId)
+      if (!userMsg || !assistantMsg) return
+
+      const ratio = userMsg.ratio ?? get().activeRatio
+
+      try {
+        const baseUrl = getBaseUrl()
+        const headers = getHeaders()
+        const result = await fetchTaskDirect(`${baseUrl}/v1/images/tasks/${taskId}`, headers)
+
+        let blob: Blob
+        if (result.b64_json) {
+          blob = await b64JsonToBlob(result.b64_json)
+        } else if (result.url) {
+          const imgRes = await fetch(result.url, { signal: AbortSignal.timeout(30_000) })
+          if (!imgRes.ok) throw new Error(`图片获取失败: ${imgRes.status}`)
+          blob = await imgRes.blob()
+        } else {
+          throw new Error('恢复响应中无图像数据')
+        }
+
+        const promptText = (userMsg.content as string).slice(0, 500)
+        const sessionId = userMsg.sessionId
+
+        await addGalleryImage({
+          src: await blobToDataUrl(blob),
+          prompt: promptText,
+          modelId: selectedModelId,
+          ratio,
+          sessionId,
+          isFavorite: false,
+          createdAt: new Date(),
+        })
+
+        await updateMessage(assistantMsgId, { taskIds: undefined })
+
+        set((_state) => ({
+          messages: _state.messages.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, type: 'image' as const, content: blob, taskIds: undefined }
+              : m
+          ),
+        }))
+
+        get().showToast('图片恢复成功', 'success')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        get().showToast(`恢复失败: ${msg}`, 'error')
+      }
     },
   }
 })

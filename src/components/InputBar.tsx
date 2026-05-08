@@ -44,6 +44,28 @@ const RATIO_CATEGORIES = [
   },
 ]
 
+const RATIO_PRESETS: Array<{ id: string; value: number }> = [
+  { id: '1:1', value: 1 },
+  { id: '3:4', value: 3 / 4 },
+  { id: '4:5', value: 4 / 5 },
+  { id: '9:16', value: 9 / 16 },
+  { id: '16:9', value: 16 / 9 },
+  { id: '4:3', value: 4 / 3 },
+  { id: '5:4', value: 5 / 4 },
+  { id: '21:9', value: 21 / 9 },
+]
+
+function matchClosestRatio(width: number, height: number): string {
+  const ratio = width / height
+  let closest = RATIO_PRESETS[0]
+  let minDiff = Math.abs(ratio - RATIO_PRESETS[0].value)
+  for (const p of RATIO_PRESETS) {
+    const diff = Math.abs(ratio - p.value)
+    if (diff < minDiff) { minDiff = diff; closest = p }
+  }
+  return closest.id
+}
+
 // ─── Ratio icon ────────────────────────────────────────────────────────────────
 
 function RatioIcon({ id, active }: { id: string; active: boolean }) {
@@ -84,6 +106,7 @@ export default function InputBar() {
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showCountMenu, setShowCountMenu] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [ratioAutoMatched, setRatioAutoMatched] = useState(false)
   const [modelMenuPos, setModelMenuPos] = useState({ top: 0, left: 0 })
   const [ratioMenuPos, setRatioMenuPos] = useState({ top: 0, left: 0 })
   const [countMenuPos, setCountMenuPos] = useState({ top: 0, left: 0 })
@@ -117,6 +140,15 @@ export default function InputBar() {
       if (editRatio) setActiveRatio(editRatio)
       clearEditPrompt()
       textareaRef.current?.focus()
+      return
+    }
+    // Inject reference images from gallery when there's no prompt text
+    if (editReferenceImages.length > 0) {
+      setReferenceImages(prev => {
+        const merged = prev.length > 0 ? [...prev, ...editReferenceImages] : editReferenceImages
+        return [...new Set(merged)]
+      })
+      clearEditPrompt()
     }
   }, [editPromptText, editReferenceImages, editRatio])
 
@@ -141,33 +173,15 @@ export default function InputBar() {
     return () => textareaRef.current?.removeEventListener('paste', handler)
   }, [])
 
-  // #region debug logs
-  const dbg = (label: string, data?: unknown) => {
-    console.log(`[DBG InputBar] ${label}`, data);
-    fetch('http://127.0.0.1:7252/ingest/f0ec8a8c-1b3f-43cf-b3aa-e816736c30f5', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9fecf5' },
-      body: JSON.stringify({ sessionId: '9fecf5', location: 'InputBar.tsx', message: label, data, timestamp: Date.now() })
-    }).catch(() => {});
-  };
-  // #endregion
-
-  // #region debug render logs
-  useEffect(() => { dbg('modelMenu render', { showModelMenu }); }, [showModelMenu]);
-  useEffect(() => { dbg('ratioMenu render', { showRatioMenu }); }, [showRatioMenu]);
-  useEffect(() => { dbg('countMenu render', { showCountMenu }); }, [showCountMenu]);
-  // #endregion
-
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const inModel = target.closest('[data-dropdown="model"]') !== null;
       const inRatio = target.closest('[data-dropdown="ratio"]') !== null;
       const inCount = target.closest('[data-dropdown="count"]') !== null;
-      dbg('doc mousedown', { tag: target.tagName, inModel, inRatio, inCount, xy: `${e.clientX},${e.clientY}` });
-      if (!inModel) { dbg('close model menu'); setShowModelMenu(false); }
-      if (!inRatio) { dbg('close ratio menu'); setShowRatioMenu(false); }
-      if (!inCount) { dbg('close count menu'); setShowCountMenu(false); }
+      if (!inModel) { setShowModelMenu(false); }
+      if (!inRatio) { setShowRatioMenu(false); }
+      if (!inCount) { setShowCountMenu(false); }
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -191,7 +205,20 @@ export default function InputBar() {
     const reader = new FileReader()
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string
-      setReferenceImages(prev => [...prev, dataUrl])
+      setReferenceImages(prev => {
+        const next = [...prev, dataUrl]
+        if (next.length === 1) {
+          const img = new Image()
+          img.onload = () => {
+            const matched = matchClosestRatio(img.naturalWidth, img.naturalHeight)
+            setActiveRatio(matched)
+            setRatioAutoMatched(true)
+            setTimeout(() => setRatioAutoMatched(false), 2500)
+          }
+          img.src = dataUrl
+        }
+        return next
+      })
     }
     reader.readAsDataURL(file)
   }
@@ -409,7 +436,11 @@ export default function InputBar() {
                   }}
                   className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-zinc-100"
                 >
-                  {activeRatio} <ChevronDown size={14} className="text-zinc-400" />
+                  {activeRatio}
+                  {ratioAutoMatched && (
+                    <span className="text-[10px] text-zinc-400 font-normal animate-ratio-matched">已匹配</span>
+                  )}
+                  <ChevronDown size={14} className="text-zinc-400" />
                 </button>
 
                 {showRatioMenu && createPortal(
