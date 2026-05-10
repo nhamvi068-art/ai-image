@@ -398,7 +398,7 @@ export default function ChatArea() {
             if (Array.isArray(content)) {
               // Support Blob[] (live generation), string[] (restored from IndexedDB as data URLs),
               // and (Blob | null)[] (in-progress placeholder with empty slots)
-              for (const item of content) {
+              for (const item of content as (Blob | string | null)[]) {
                 if (item === null) continue
                 if (typeof item === 'string' && item.startsWith('data:')) {
                   generatedUrls.push(item)

@@ -171,7 +171,7 @@ export async function addMessage(msg: Omit<Message, 'id'>): Promise<number> {
           urls.push(item as string)
         }
       }
-      toSave = { ...toSave, content: urls }
+      toSave = { ...toSave, content: urls } as unknown as Message
     } else if (toSave.content instanceof Blob) {
       toSave = { ...toSave, content: await convertToDataUrl(toSave.content) }
     }

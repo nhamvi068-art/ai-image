@@ -256,7 +256,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           sessionId,
           role: 'assistant',
           type: 'image',
-          content: blobs,
+          content: blobs as unknown as Message['content'],
           modelId: selectedModelId,
           referenceImages: [],
           ratio: currentRatio,
@@ -361,7 +361,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             reader.readAsDataURL(blob)
           })))
         }
-        const dataUrlContent = await blobsToDataUrls(blobs.filter(Boolean) as Blob[])
+        const dataUrlContent = await blobsToDataUrls(blobs.filter(Boolean) as Blob[]) as unknown as Message['content']
         const realMsgId = await addMessage({
           sessionId,
           role: 'assistant',
@@ -388,7 +388,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               sessionId,
               role: 'assistant',
               type: 'image',
-              content: dataUrlContent,
+              content: dataUrlContent as Message['content'],
               modelId: selectedModelId,
               referenceImages: [],
               ratio: currentRatio,
@@ -512,14 +512,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
 
     restoreImageToChat: async ({ src, prompt, modelId, ratio, sessionId }) => {
-      const { currentSessionId } = get()
-
       // If the original session still exists, use it; otherwise create a new one
       const targetSessionId = sessionId && get().sessions.some(s => s.id === sessionId)
         ? sessionId
         : await createSession(prompt.slice(0, 40))
 
-      const userMsgId = await addMessage({
+      await addMessage({
         sessionId: targetSessionId,
         role: 'user',
         type: 'text',
@@ -530,11 +528,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createdAt: new Date(),
       })
 
-      const assistantMsgId = await addMessage({
+      await addMessage({
         sessionId: targetSessionId,
         role: 'assistant',
         type: 'image',
-        content: [src],
+        content: [src] as unknown as Message['content'],
         modelId,
         referenceImages: [],
         ratio: ratio ?? '1:1',

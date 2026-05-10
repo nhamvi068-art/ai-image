@@ -51,8 +51,6 @@ export interface PollProgress {
 // ─── Status mapping ─────────────────────────────────────────────────────────────
 
 const COMPLETED_STATUSES = new Set(['completed', 'success', 'succeeded', 'finished', 'ok', 'done', 'complete'])
-const FAILED_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled', 'expired', 'rejected', 'failure'])
-const PENDING_STATUSES = new Set(['pending', 'queued', 'queue', 'waiting', 'processing', 'in_progress', 'inqueue', 'submitted'])
 
 function mapToProgressStatus(raw: string): PollProgressStatus {
   const s = raw.toLowerCase()
@@ -137,7 +135,7 @@ function extractResultFromJson(json: Record<string, unknown>): PollResult {
 
   const outerData = json.data as Record<string, unknown> | undefined
   const taskStatus: string = (outerData?.status as string | undefined ?? '').toLowerCase()
-  const rawStatus: string = (json.data as Record<string, unknown> | undefined)?.status ?? json.status ?? ''
+  const rawStatus: string = ((json.data as Record<string, unknown> | undefined)?.status ?? json.status ?? '') as string
   const status: string = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : ''
 
   const log = (msg: string, detail?: unknown) => {
